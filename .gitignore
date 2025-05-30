@@ -1,0 +1,19 @@
+# Mengabaikan file Python yang dihasilkan
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Mengabaikan file dari virtual environment
+venv/
+.env/
+.venv/
+
+# Mengabaikan log dan database sementara
+*.log
+*.sqlite3
+
+# Mengabaikan konfigurasi editor atau sistem
+.vscode/
+.idea/
+.DS_Store
