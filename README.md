@@ -22,7 +22,7 @@ Jaya Jaya Institut adalah institusi pendidikan tinggi yang telah berdiri sejak t
 
 **Sumber data:**
 
-* Dataset "Students' Performance" (`students_performance.csv` / `dataset_final.csv` setelah preprocessing).
+* Dataset "Students' Performance" (`data.csv` / `dataset_final.csv` setelah preprocessing).
 
 **Setup environment:**
 
