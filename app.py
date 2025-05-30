@@ -4,88 +4,150 @@ import numpy as np
 import joblib
 import shap
 
-# ---------------------------------------------------------
-# Load trained pipeline (preprocess + LogisticRegression)
-# ---------------------------------------------------------
-@st.cache_resource(show_spinner="Memuat model ...")
+st.set_page_config(page_title="Prediksi Risiko Dropout", layout="wide")
+
+@st.cache_resource
 def load_model():
     return joblib.load("dropout_model.pkl")
 
 model = load_model()
-EXPECTED_COLS = list(model.named_steps["prep"].feature_names_in_)
+prep  = model.named_steps["prep"]
+clf   = model.named_steps["clf"]
 
-# ---------------------------------------------------------
-# UI Sidebar
-# ---------------------------------------------------------
-st.title("Early‑Warning Dropout Predictor")
-st.write("Masukkan informasi akademik dan finansial mahasiswa untuk memprediksi risiko dropout.")
+EXPECTED_INPUT_COLS = prep.feature_names_in_
+FEATURE_NAMES        = prep.get_feature_names_out()
 
-st.sidebar.header("Input Mahasiswa")
-age          = st.sidebar.number_input("Usia saat mendaftar (tahun)", 17, 70, 20, key="age")
-adm_grade     = st.sidebar.number_input("Admission grade (0‑200)", 0.0, 200.0, 130.0, step=0.1, key="adm_grade")
+def add_engineered_cols(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["pass_rate_sem1"] = (
+        df["Curricular_units_1st_sem_approved"]
+        / df["Curricular_units_1st_sem_enrolled"].replace(0, np.nan)
+    ).fillna(0)
+    df["pass_rate_sem2"] = (
+        df["Curricular_units_2nd_sem_approved"]
+        / df["Curricular_units_2nd_sem_enrolled"].replace(0, np.nan)
+    ).fillna(0)
+    df["finance_risk"] = (
+        (df["Tuition_fees_up_to_date"] == 0) | (df["Debtor"] == 1)
+    ).astype(int)
+    return df
 
-st.sidebar.markdown("### Semester 1")
-sem1_enrolled = st.sidebar.number_input("Mata kuliah diambil S1", 0, 40, 6, key="sem1_enrolled")
-sem1_approved = st.sidebar.number_input("Mata kuliah lulus S1", 0, 40, 5, key="sem1_approved")
+@st.cache_data
+def load_data_and_options():
+    df = pd.read_csv("data.csv", sep=";")
+    opts = {
+        "Application_mode": sorted(df["Application_mode"].unique()),
+        "Course"          : sorted(df["Course"].unique()),
+        "Mothers_qualification": sorted(df["Mothers_qualification"].unique()),
+        "Fathers_qualification": sorted(df["Fathers_qualification"].unique())
+    }
+    feat_df = add_engineered_cols(df)
+    X_trans = prep.transform(feat_df)
+    idx = np.random.choice(X_trans.shape[0], size=min(100, X_trans.shape[0]), replace=False)
+    background = X_trans[idx]
+    return opts, background
 
-st.sidebar.markdown("### Semester 2")
-sem2_enrolled = st.sidebar.number_input("Mata kuliah diambil S2", 0, 40, 6, key="sem2_enrolled")
-sem2_approved = st.sidebar.number_input("Mata kuliah lulus S2", 0, 40, 4, key="sem2_approved")
+opts, BACKGROUND = load_data_and_options()
 
-st.sidebar.markdown("### Status Keuangan")
-late_fee = st.sidebar.selectbox("Apakah telat bayar semester berjalan?", ("Tidak", "Ya"), key="late_fee")
-debtor   = st.sidebar.selectbox("Apakah tercatat Debtor?", ("Tidak", "Ya"), key="debtor")
+explainer = shap.Explainer(clf, BACKGROUND, feature_names=FEATURE_NAMES)
 
-# ---------------------------------------------------------
-# Helper untuk membangun DataFrame fitur lengkap
-# ---------------------------------------------------------
 
-def build_feature_df():
-    df = pd.DataFrame([{
+def build_feature_df(inputs: dict) -> pd.DataFrame:
+    """Buat DataFrame 1 baris, engineered + reindex sesuai EXPECTED_INPUT_COLS."""
+    df = pd.DataFrame([inputs])
+    df = add_engineered_cols(df)
+    df = df.reindex(columns=EXPECTED_INPUT_COLS, fill_value=0)
+    return df
+
+st.sidebar.header("📝 Input Data Mahasiswa")
+admission_grade = st.sidebar.number_input(
+    "Admission Grade", 95.0, 190.0, 127.0, step=0.1, key="adg"
+)
+age = st.sidebar.number_input(
+    "Age at Enrollment", 17, 70, 23, step=1, key="age"
+)
+sem1_enrolled = st.sidebar.number_input(
+    "1st Sem Enrolled", 0, 26, 6, step=1, key="s1e"
+)
+sem1_approved = st.sidebar.number_input(
+    "1st Sem Approved", 0, 26, 5, step=1, key="s1a"
+)
+sem2_enrolled = st.sidebar.number_input(
+    "2nd Sem Enrolled", 0, 26, 6, step=1, key="s2e"
+)
+sem2_approved = st.sidebar.number_input(
+    "2nd Sem Approved", 0, 26, 5, step=1, key="s2a"
+)
+tuition_up = st.sidebar.selectbox(
+    "Tuition Fees Up to Date?", [1, 0], format_func=lambda x: "Yes" if x==1 else "No", key="tut"
+)
+debtor = st.sidebar.selectbox(
+    "Debtor?", [0, 1], format_func=lambda x: "No" if x==0 else "Yes", key="deb"
+)
+gender = st.sidebar.selectbox(
+    "Gender (0=Female,1=Male)", [0,1], key="gen"
+)
+scholar = st.sidebar.selectbox(
+    "Scholarship Holder?", [0,1], format_func=lambda x: "No" if x==0 else "Yes", key="sch"
+)
+day_eve = st.sidebar.selectbox(
+    "Daytime Attendance? (1=Yes)", [0,1], key="de"
+)
+intl = st.sidebar.selectbox(
+    "International Student?", [0,1], key="intl"
+)
+edu_need = st.sidebar.selectbox(
+    "Special Educational Needs?", [0,1], key="spn"
+)
+app_mode = st.sidebar.selectbox(
+    "Application Mode", opts["Application_mode"], key="am"
+)
+course = st.sidebar.selectbox(
+    "Course Code", opts["Course"], key="crs"
+)
+mom_qual = st.sidebar.selectbox(
+    "Mother's Qualification", opts["Mothers_qualification"], key="mq"
+)
+dad_qual = st.sidebar.selectbox(
+    "Father's Qualification", opts["Fathers_qualification"], key="dq"
+)
+
+if st.sidebar.button("Prediksi Risiko Dropout", key="pred"):
+    user_inputs = {
+        "Admission_grade": admission_grade,
         "Age_at_enrollment": age,
-        "Admission_grade": adm_grade,
         "Curricular_units_1st_sem_enrolled": sem1_enrolled,
         "Curricular_units_1st_sem_approved": sem1_approved,
         "Curricular_units_2nd_sem_enrolled": sem2_enrolled,
         "Curricular_units_2nd_sem_approved": sem2_approved,
-        "Tuition_fees_up_to_date": 0 if late_fee == "Tidak" else 1,
-        "Debtor": 0 if debtor == "Tidak" else 1,
-    }])
+        "Tuition_fees_up_to_date": tuition_up,
+        "Debtor": debtor,
+        "Gender": gender,
+        "Scholarship_holder": scholar,
+        "Daytime_evening_attendance": day_eve,
+        "International": intl,
+        "Educational_special_needs": edu_need,
+        "Application_mode": app_mode,
+        "Course": course,
+        "Mothers_qualification": mom_qual,
+        "Fathers_qualification": dad_qual
+    }
 
-    df["pass_rate_sem1"] = (df["Curricular_units_1st_sem_approved"] / df["Curricular_units_1st_sem_enrolled"].replace(0, np.nan)).fillna(0)
-    df["pass_rate_sem2"] = (df["Curricular_units_2nd_sem_approved"] / df["Curricular_units_2nd_sem_enrolled"].replace(0, np.nan)).fillna(0)
-    df["finance_risk"]   = ((df["Tuition_fees_up_to_date"] == 1) | (df["Debtor"] == 1)).astype(int)
+    feat_df = build_feature_df(user_inputs)
 
-    # Tambahkan kolom lain sebagai NaN lalu reindex agar urut & komplit
-    df_full = df.reindex(columns=EXPECTED_COLS, fill_value=np.nan)
-    return df_full
+    score = model.predict_proba(feat_df)[:,1][0]
+    level = "Red" if score>=0.65 else "Yellow" if score>=0.40 else "No-risk"
 
-# ---------------------------------------------------------
-# Predict & Explain
-# ---------------------------------------------------------
-if st.button("Prediksi Risiko Dropout"):
-    feat_df = build_feature_df()
+    st.metric("🔎 Probabilitas Dropout", f"{score:.1%}", delta=None)
+    st.markdown(f"**Risk Level:** {level}")
 
-    prob = model.predict_proba(feat_df)[0, 1]
-    risk_level = "No‑risk" if prob < 0.40 else ("Yellow" if prob < 0.65 else "Red")
-
-    st.metric("Probabilitas Dropout", f"{prob:.1%}")
-    st.write(f"**Kategori:** {risk_level}")
-
-    st.subheader("Kontributor Risiko (Top‑5)")
-
-    # SHAP linear explainer
-    X_trans = model.named_steps["prep"].transform(feat_df)
-    feature_names = model.named_steps["prep"].get_feature_names_out()
-
-    explainer = shap.LinearExplainer(model.named_steps["clf"], X_trans, feature_names=feature_names, model_output="log_odds")
-    shap_vals = explainer.shap_values(X_trans)[0]
-
-    top_idx = np.argsort(np.abs(shap_vals))[-5:][::-1]
-    top_df  = pd.DataFrame({
-        "Feature": feature_names[top_idx],
-        "Impact (± log‑odds)": shap_vals[top_idx]
+    X_user = prep.transform(feat_df)
+    shap_vals = explainer(X_user).values[0]  # array shape (n_features,)
+    idx_top5 = np.argsort(np.abs(shap_vals))[-5:][::-1]
+    top5 = pd.DataFrame({
+        "Feature": FEATURE_NAMES[idx_top5],
+        "Impact (± log-odds)": shap_vals[idx_top5]
     })
 
-    st.dataframe(top_df, use_container_width=True)
-    st.caption("Positif ⇒ menaikkan risiko, Negatif ⇒ menurunkan risiko.")
+    st.subheader("Kontributor Risiko (Top-5)")
+    st.dataframe(top5, use_container_width=True)
