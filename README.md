@@ -53,10 +53,10 @@ Dashboard "Early-Warning & Impact Center" di Tableau menampilkan:
 
 * KPI ringkasan (Total siswa, Prediksi Dropout %, Recall, Precision).
 * Distribusi Risk Level (No-risk / Yellow / Red).
-* Komposisi finance\_risk dalam tiap risk\_level.
+* Distribusi Pass Rate Sem 1 per Risk Level.
 
 **Link akses dashboard:**
-[https://tableau.server.domain/views/EarlyWarningImpactCenter](https://tableau.server.domain/views/EarlyWarningImpactCenter)
+[https://public.tableau.com/views/PredictDropout/Dashboard1?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link](https://public.tableau.com/views/PredictDropout/Dashboard1?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link)
 
 ## Menjalankan Sistem Machine Learning
 
@@ -68,7 +68,7 @@ streamlit run app.py
 ```
 
 Akses prototype di:
-[https://jj-institut-dropout.streamlit.app](https://jj-institut-dropout.streamlit.app)
+[https://projectsubmissionds2-smapp6gnle7w4kntrsyyifh.streamlit.app/](https://projectsubmissionds2-smapp6gnle7w4kntrsyyifh.streamlit.app/)
 
 ## Conclusion
 
